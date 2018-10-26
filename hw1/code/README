@@ -1,0 +1,6 @@
+
+边值可选择为constant，reflect，nearest。通过argv[6]传入，默认为constant
+噪音大小noise_rate通过argv[7]传入,默认为100   即附加max(u)/noise_rate的噪音
+可处理rgb以及灰度图像
+
+
