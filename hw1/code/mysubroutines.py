@@ -6,12 +6,13 @@ from scipy.ndimage import convolve
 from scipy.signal import convolve2d
 from scipy.sparse import linalg
 from scipy.sparse.linalg import LinearOperator
+import time
 
-def mysolver(u_hat,kernel,lambda_weight,mode='constant'):
-    mu = 1e-8
-    tol = 1e-3
-#    delta = (5**(1/2)+1)/2
-    delta = 0.5
+def mysolver(u_hat,kernel,lambda_weight,mode='constant',max_step=10):
+    mu = 1e-4
+    tol = 1e-8
+    delta = (5**(1/2)+1)/2
+#    delta = 0.5
     function = A(mu,u_hat.shape,kernel,mode)
     m,n,l = u_hat.shape
     function_A = LinearOperator((m*n*l,m*n*l),matvec=function)
@@ -20,16 +21,23 @@ def mysolver(u_hat,kernel,lambda_weight,mode='constant'):
     d1,d2 = grad(u,mode)
     b1 = np.zeros(u.shape)
     b2 = np.zeros(u.shape)
-    tol = tol**2 * np.sum(u_hat*u_hat)
-    for i in range(20):
-        ite = 3
-        cg_tol = 0.5*1e-3
+    f_norm = np.sum(u_hat*u_hat)
+    start = time.clock()
+    for i in range(max_step):
+        ite = 3+i//100
+        cg_tol = 0.5*1e-5
         u,d1,d2,b1,b2,Wu1,Wu2 = Admm(                                                  function_A,u,d1,d2,b1,b2,ATf,lambda_weight,mu,mode=mode,delta=delta,ite=ite,cg_tol=cg_tol)
         err = np.sum((Wu1-d1)*(Wu1-d1))+np.sum((Wu2-d2)*(Wu2-d2))
-        print(err,i)
+        err = err/f_norm
+        err = err*(1/2)
+        end = time.clock()
+        print(err,i,end-start)
+        start = time.clock()
         if err < tol:
             break
 #    pdb.set_trace()
+    u[u>1.0]=1.0
+    u[u<0.0]=0
     return u
 
 
@@ -38,6 +46,11 @@ def fspecial(kernel_size,gaussian_sigma):
     i_a = np.zeros([kernel_size,1])
     j_a = np.zeros([1,kernel_size])
     sigma = gaussian_sigma**2
+    if sigma == 0:
+        kernel = K_g.copy()
+        mid = (kernel_size-1)//2
+        kernel[mid,mid] = 1
+        return kernel
     for i in range(kernel_size):
         i_a[i,0] = (i-(kernel_size-1)/2)**2 
         j_a[0,i] = (i-(kernel_size-1)/2)**2
@@ -79,7 +92,7 @@ def Tau(tau, nu):
 def A(mu,u_shape,kernel,mode='constant'):
     def f(x):
         x = x.reshape(u_shape)
-        return np.reshape(conv(conv(x,kernel,mode=mode),kernel,mode=mode) + mu*laplace(x,mode=mode),-1)
+        return np.reshape(conv(conv(x,kernel,mode=mode),kernel,mode=mode) - mu*laplace(x,mode=mode),-1)
 ##        return np.reshape(conv(conv(x,kernel,mode=mode),kernel,mode=mode) + mu*div(*grad(x,mode),mode),-1)
     return f
 
@@ -108,17 +121,21 @@ def div(u1,u2,mode='constant'):
     return u
     
 def Admm(function_A,u,d1,d2,b1,b2,ATf,lamb,mu,mode='constant',delta=1,ite=8,cg_tol=1e-3):
-    b0 = ATf + np.reshape(mu*div(d1-b1,d2-b2,mode=mode),-1)
+    b0 = ATf - np.reshape(mu*div(d1-b1,d2-b2,mode=mode),-1)
     u = u.reshape(-1)
     u,infos = linalg.cgs(function_A,b0,x0=u,maxiter=ite,tol=cg_tol)
-#    u,infos = linalg.cgs(function_A,b0,maxiter=ite,tol=cg_tol)
-#    print(infos)
+    u[u>1.0]=1.0
+    u[u<0.0]=0
+#    u,infos = linalg.cgs(function_A,b0,x0=u,maxiter=ite)
+#    u,infos = linalg.cgs(function_A,b0,maxiter=3)
+    print(infos)
+    print('max_u='+ str(np.max(u)) + '    min_u='+str(np.min(u))) 
 #    print(np.linalg.norm(function_A(u)-b0)/np.linalg.norm(b0))
     u = u.reshape(d1.shape)
 #    u = (u-np.min(u)) / (np.max(u)-np.min(u))
-    u = u/np.max(abs(u))
-    u[u>1.0]=1.0
-    u[u<0.0]=0
+#    u = u/np.max(abs(u))
+#    u[u>1.0]=1.0
+#    u[u<0.0]=0
     Wu1,Wu2 = grad(u,mode=mode)
     d1 = Tau(lamb/mu, Wu1+b1)
     d2 = Tau(lamb/mu, Wu2+b2)
