@@ -1,0 +1,99 @@
+\documentclass[UTF8]{ctexart}
+\usepackage{CJKutf8}
+\usepackage{graphicx}
+\usepackage{subfig}
+\usepackage{amsmath}
+\usepackage{diagbox}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[linesnumbered,boxed,ruled,commentsnumbered]{algorithm2e}
+\usepackage{cite}
+
+  \author{黄晃\ 数院 1701210098 }
+  \title{大数据项目二}
+\begin{document}
+
+  \maketitle
+
+  
+  \section{问题}
+  考虑形式如下的问题
+  $$
+  \min_{0 \leq u \leq 1} |\nabla u|+\mu <u,r>,\ r=(f-c_1)^2+(f-c_2)^2.
+  $$
+  其中$$
+  g=1,\ or\ g=\frac{1}{1+\alpha |\nabla f|^2}
+  $$
+  令$d=\nabla u$,得到增广拉格朗日迭代
+$$
+\begin{aligned}
+(u,k) & = \arg \min_{0\leq u \leq 1,d} + \mu<u,r> +\frac{\lambda}{2}\|d-\nabla u - b\|^2  \\
+b &= b+\nabla u -d  
+\end{aligned}
+	     $$
+   使用ADMM来求解第一个极小问题
+  \paragraph{u的求解}
+  $$
+  u = \arg\min_{0 \leq u \leq 1} \mu <u,r> + \frac{\lambda}{2}\|d-\nabla u -b\|^2
+  $$
+  该极值问题的变分问题为如下Euler-Lagrange Equation
+  \begin{equation}\label{Euler}
+  \Delta u = \frac{\mu}{\lambda}r+\nabla \cdot (d-b),\ 0\leq u\leq 1 
+  \end{equation}
+  参考文献中所说的单步的GS迭代进行近似求解,见算法~\ref{GS}
+  \paragraph{d的求解}
+  $$
+  d = shrink_g(b+\nabla u, \lambda)
+  $$
+  其中
+  $$shrink_g(\overrightarrow{z},\lambda)_i=\max\{\|\overrightarrow{z}_i\|-\lambda/g_i\,0\}\frac{\overrightarrow{z}_i}{\|\overrightarrow{z}_i\|}$$
+  
+  $\overrightarrow{z}_i$表示在格点i处的z的分量(不限于1维),例如在$\overrightarrow{z}=\nabla  u$时,$\overrightarrow{z}_i=[\frac{\partial u}{\partial x}_i,\frac{\partial u}{\partial y}_i]$
+
+\begin{algorithm}
+    \SetAlgoNoLine % 不要算法中的竖线
+    \SetKwInOut{Input}{\textbf{输入}}\SetKwInOut{Output}{\textbf{输出}} % 替换关键词
+
+    \Input{
+         $\mu,\lambda,r$,
+         $u,d,b$;\\}
+    \Output{
+        $u$\;\\}
+    \BlankLine
+
+    \For {$i,j=1,2,\cdots,M,N$}{
+		$a_{i,j} = d_{i-1,j}^x-d_{i,j}^x-b_{i-1,j}^x+b_{i,j}^x +d_{i,j-1}^y-d_{i,j}^y-b_{i,j-1}^y+b_{i,j}^y$ \;
+		$b_{i,j}=\frac{1}{4}(u_{i-1,j}+u_{i+1,j}+u_{i,j-1}+u_{i,j+1}-\frac{\mu}{\lambda}r+a_{i,j})$ \;
+		$u_{i,j}=\max\{\min\{b_{i,j},1\},0\}$
+    }    
+    \caption{$GS_{GCS}$\label{GS}}
+\end{algorithm}
+    
+\begin{algorithm}
+    \SetAlgoNoLine % 不要算法中的竖线
+    \SetKwInOut{Input}{\textbf{输入}}\SetKwInOut{Output}{\textbf{输出}} % 替换关键词
+
+    \Input{
+         $\lambda,\mu$,
+        $\epsilon,f$\;\\}
+    \Output{
+        $u$\;\\}
+    \BlankLine
+
+    \For {$k=1,2,\cdots,MaxStep$}{
+    	$\Omega^k = \{x:u^{k-1}(x)>\mu\} $ \;
+    	$c_1^k = \int_{\Omega^k} f \mathrm{d}x,\ c_2^k = \int_{(\Omega^k)^c}f \mathrm{d}x $ \;
+    	$r^k = (c_1^k-f)^2-(c_2^k-f)^2$ \;
+        $u^{k}=GS_{GCS}(r^{k},d^{k-1},b^{k-1})$ \;
+        $d^{k}=shrink_g(\nabla u^k + b^{k-1}, \lambda)$ \;
+        $b^{k}=b^{k-1}+\nabla u^k - d^k$ \;
+        \If {$\|u_{k}-u_{k-1}\| < \epsilon$}{
+        break}
+    }
+    \caption{ADMM for GCS\label{ADMM}}
+\end{algorithm}
+\subsection{算法细节}
+
+
+
+\end{document} 
